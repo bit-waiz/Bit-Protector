@@ -40,22 +40,20 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange }) => {
             <button
               type="button"
               onClick={() => onTabChange('app')}
-              className={`px-3 py-1 rounded-full text-xs font-mono transition-all ${
-                activeTab === 'app'
+              className={`px-3 py-1 rounded-full text-xs font-mono transition-all ${activeTab === 'app'
                   ? 'bg-primary-container text-on-primary-container font-semibold shadow-sm'
                   : 'text-on-surface-variant hover:text-on-surface'
-              }`}
+                }`}
             >
               Sanitizer
             </button>
             <button
               type="button"
               onClick={() => onTabChange('faq')}
-              className={`px-3 py-1 rounded-full text-xs font-mono transition-all flex items-center gap-1 ${
-                activeTab === 'faq'
+              className={`px-3 py-1 rounded-full text-xs font-mono transition-all flex items-center gap-1 ${activeTab === 'faq'
                   ? 'bg-primary-container text-on-primary-container font-semibold shadow-sm'
                   : 'text-on-surface-variant hover:text-on-surface'
-              }`}
+                }`}
             >
               <HelpCircle className="w-3 h-3" />
               <span>FAQ</span>
@@ -64,7 +62,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange }) => {
 
           {/* GitHub Link */}
           <a
-            href="https://github.com"
+            href="https://github.com/bit-waiz/Bit-Protector"
             target="_blank"
             rel="noreferrer"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface text-xs font-mono transition-all border border-surface-container-highest"

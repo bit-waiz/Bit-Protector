@@ -13,6 +13,8 @@
 
 No files, filenames, byte offsets, or telemetry ever leave your device.
 
+> 🚀 **Live Demo:** [https://bitprotector.vercel.app/](https://bitprotector.vercel.app/)
+
 ---
 
 ## ⚡ Architecture Flow

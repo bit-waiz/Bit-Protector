@@ -26,23 +26,44 @@ export const MetadataTable: React.FC<MetadataTableProps> = ({ inspection }) => {
   }
 
   return (
-    <div className="rounded-2xl bg-surface-container-low/70 p-5 sm:p-6 border border-surface-container-high/60 flex flex-col gap-4 shadow-sm">
+    <div className="rounded-2xl bg-surface-container-low/70 p-4 sm:p-6 border border-surface-container-high/60 flex flex-col gap-4 shadow-sm">
       {/* Header */}
       <div className="flex items-center justify-between pb-3 border-b border-surface-container-high/60">
         <div className="flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-red-400" />
-          <h3 className="font-semibold text-base text-on-surface">
+          <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+          <h3 className="font-semibold text-sm sm:text-base text-on-surface">
             Detected Metadata Exposure (<span className="text-red-400 font-mono font-bold">{items.length}</span>)
           </h3>
         </div>
       </div>
 
-      {/* 2-Column Simple Table with RED high-contrast exposure highlights */}
-      <div className="overflow-x-auto">
+      {/* Mobile (< sm): Clean Vertical Card/List Layout */}
+      <div className="sm:hidden flex flex-col gap-2.5">
+        {items.map((item) => (
+          <div
+            key={item.id}
+            className="p-3 rounded-xl bg-red-950/20 border border-red-900/40 flex flex-col gap-1.5"
+          >
+            {/* Property Label row */}
+            <div className="flex items-center gap-2 text-red-400 font-mono text-xs font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse flex-shrink-0" />
+              <span className="whitespace-nowrap">{item.name}</span>
+            </div>
+
+            {/* Value in full-width pill box */}
+            <div className="w-full px-2.5 py-1.5 rounded-lg bg-red-950/40 border border-red-500/20 text-red-200 font-mono text-xs break-all select-all">
+              {item.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop (>= sm): Traditional 2-Column Tabular View */}
+      <div className="hidden sm:block overflow-x-auto">
         <table className="w-full text-left text-xs sm:text-sm">
           <thead>
             <tr className="border-b border-surface-container-high/80 text-outline uppercase font-mono text-[11px]">
-              <th className="py-2.5 px-3 font-medium w-1/3">Property</th>
+              <th className="py-2.5 px-3 font-medium w-1/3 whitespace-nowrap">Property</th>
               <th className="py-2.5 px-3 font-medium w-2/3">Value</th>
             </tr>
           </thead>
@@ -52,7 +73,7 @@ export const MetadataTable: React.FC<MetadataTableProps> = ({ inspection }) => {
                 key={item.id}
                 className="bg-red-950/20 hover:bg-red-950/40 transition-colors"
               >
-                <td className="py-2.5 px-3 font-semibold text-red-400 align-top">
+                <td className="py-2.5 px-3 font-semibold text-red-400 align-top whitespace-nowrap">
                   <div className="flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse flex-shrink-0" />
                     <span>{item.name}</span>

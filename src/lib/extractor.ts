@@ -5,59 +5,103 @@ import piexif from 'piexifjs';
 import { InspectionResult, MetadataCategory, MetadataItem, RiskLevel, GPSInfo } from './types';
 
 /**
- * Canonical display-label map for overlapping EXIF/metadata keys.
- * Keys that map to the same canonical label are considered duplicates;
- * only the first occurrence (by insertion order) is kept.
+ * Normalizes a date/time string so that different formats
+ * (e.g. "2026:09:27 12:45:54" vs "2026-09-27 12:45:54" vs ISO formats)
+ * can be accurately compared for duplicate detection.
  */
-const CANONICAL_KEY_MAP: Record<string, string> = {
-  // Timestamps
-  DateTimeOriginal: 'Date Taken',
-  DateTimeDigitized: 'Date Taken',
-  CreateDate: 'Date Taken',
-  DateTime: 'Date Modified',
-  ModifyDate: 'Date Modified',
-  ModDate: 'Date Modified',
-  // Author
-  Artist: 'Author / Artist',
-  'By-line': 'Author / Artist',
-  Creator: 'Author / Artist',
-  'dc:creator': 'Author / Artist',
-  // Software
-  Software: 'Software',
-  CreatorTool: 'Software',
-  ProcessingSoftware: 'Software',
-  // Serial
-  BodySerialNumber: 'Camera Serial #',
-  CameraSerialNumber: 'Camera Serial #',
-  InternalSerialNumber: 'Camera Serial #',
-  LensSerialNumber: 'Lens Serial #',
-};
+function normalizeDateValue(val: string): string {
+  if (!val) return '';
+  return val
+    .trim()
+    .replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3')
+    .replace('T', ' ')
+    .replace(/Z$/, '')
+    .substring(0, 19);
+}
 
 /**
- * Normalizes a metadata item's key to its canonical display label
- * and deduplicates the list so each canonical key appears only once.
+ * Normalizes strings for loose equality comparison
+ */
+function normalizeValue(val: string): string {
+  if (!val) return '';
+  return val.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/**
+ * Deduplicates and normalizes extracted metadata items so each unique
+ * metadata property appears cleanly and exactly once in the inspection table.
  */
 function deduplicateMetadataItems(items: MetadataItem[]): MetadataItem[] {
-  const seen = new Set<string>();
   const result: MetadataItem[] = [];
+  const seenExact = new Set<string>(); // name + normalized value
+  const seenTimestamps = new Map<string, string>(); // normalized date string -> primary item id
+  const seenAuthors = new Set<string>(); // normalized author value
+  const seenGps = new Set<string>(); // normalized gps value
+  const seenSerials = new Set<string>(); // normalized serial value
+  const seenModels = new Set<string>(); // normalized model value
+  const seenSoftware = new Set<string>(); // normalized software value
 
   for (const item of items) {
-    const canonicalKey = CANONICAL_KEY_MAP[item.key] ?? item.key;
-    // Use canonical key + value as the dedup fingerprint
-    const fingerprint = `${canonicalKey}::${item.value}`;
+    const normVal = normalizeValue(item.value);
+    if (!normVal) continue;
 
-    // Also deduplicate by canonical key alone (keep first encountered value)
-    const keyOnlyFingerprint = `KEY::${canonicalKey}`;
-
-    if (!seen.has(fingerprint) && !seen.has(keyOnlyFingerprint)) {
-      seen.add(fingerprint);
-      seen.add(keyOnlyFingerprint);
-      // Apply the canonical label to the display key
-      result.push({
-        ...item,
-        key: canonicalKey,
-      });
+    // 1. Strict exact check: Same display name + same normalized value -> Skip duplicate
+    const exactKey = `${item.name.toLowerCase()}::${normVal}`;
+    if (seenExact.has(exactKey)) {
+      continue;
     }
+
+    // 2. Category-specific smart deduplication
+
+    // A. Timestamps deduplication
+    if (item.category === 'timestamps') {
+      const dateKey = normalizeDateValue(item.value);
+      if (dateKey) {
+        // If we already have a timestamp with the EXACT same date/time value:
+        if (seenTimestamps.has(dateKey)) {
+          // If the existing one is "Original Date & Time" or "Creation Date & Time", skip this duplicate timestamp
+          continue;
+        }
+        seenTimestamps.set(dateKey, item.name);
+      }
+    }
+
+    // B. Author deduplication
+    if (item.category === 'author') {
+      if (seenAuthors.has(normVal)) {
+        continue;
+      }
+      seenAuthors.add(normVal);
+    }
+
+    // C. GPS deduplication
+    if (item.category === 'location') {
+      if (item.name.toLowerCase().includes('location') || item.key.toLowerCase().includes('gpslatitude')) {
+        if (seenGps.has(normVal)) continue;
+        seenGps.add(normVal);
+      }
+    }
+
+    // D. Hardware Serial Number deduplication
+    if (item.category === 'device' && (item.name.toLowerCase().includes('serial') || item.key.toLowerCase().includes('serial'))) {
+      if (seenSerials.has(normVal)) continue;
+      seenSerials.add(normVal);
+    }
+
+    // E. Camera / Device Model deduplication
+    if (item.category === 'device' && (item.name.toLowerCase().includes('model') || item.key.toLowerCase().includes('model'))) {
+      if (seenModels.has(normVal)) continue;
+      seenModels.add(normVal);
+    }
+
+    // F. Software deduplication
+    if (item.category === 'software') {
+      if (seenSoftware.has(normVal)) continue;
+      seenSoftware.add(normVal);
+    }
+
+    seenExact.add(exactKey);
+    result.push(item);
   }
 
   return result;
@@ -133,8 +177,6 @@ export async function inspectFile(file: File | { name: string; size: number; arr
   }
 
   // ── Deduplication & Normalization ────────────────────────────────────────────
-  // Apply canonical key normalization and remove duplicate metadata fields
-  // so each distinct property appears exactly once in the MetadataTable.
   const dedupedItems = deduplicateMetadataItems(items);
 
   // Categorize deduplicated items
@@ -298,7 +340,7 @@ async function extractImageMetadata(buffer: ArrayBuffer, ext: string) {
           items.push({
             id: `author-${k.toLowerCase()}`,
             category: 'author',
-            name: 'Author / Artist',
+            name: 'Author / Creator',
             key: k,
             value: String(parsed[k]),
             isSensitive: true,
@@ -352,18 +394,24 @@ async function extractImageMetadata(buffer: ArrayBuffer, ext: string) {
         });
       }
 
-      // Timestamps
-      const timeKeys = ['DateTimeOriginal', 'CreateDate', 'ModifyDate', 'DateTimeDigitized'];
-      for (const k of timeKeys) {
-        if (parsed[k]) {
-          let val = parsed[k];
+      // Timestamps with distinct display names
+      const timeConfigs = [
+        { key: 'DateTimeOriginal', label: 'Original Date & Time' },
+        { key: 'CreateDate', label: 'Creation Date & Time' },
+        { key: 'ModifyDate', label: 'Modified Date & Time' },
+        { key: 'DateTimeDigitized', label: 'Digitized Date & Time' },
+      ];
+
+      for (const config of timeConfigs) {
+        if (parsed[config.key]) {
+          let val = parsed[config.key];
           if (val instanceof Date) val = val.toISOString().replace('T', ' ').substring(0, 19);
           if (String(val).trim() && !String(val).startsWith('1970')) {
             items.push({
-              id: `time-${k.toLowerCase()}`,
+              id: `time-${config.key.toLowerCase()}`,
               category: 'timestamps',
-              name: 'Date & Time',
-              key: k,
+              name: config.label,
+              key: config.key,
               value: String(val),
               isSensitive: false,
               severity: 'MEDIUM',
@@ -512,7 +560,7 @@ async function extractImageMetadata(buffer: ArrayBuffer, ext: string) {
             items.push({
               id: 'author-piexif',
               category: 'author',
-              name: 'Author / Artist',
+              name: 'Author / Creator',
               key: 'Artist',
               value: String(artist).trim(),
               isSensitive: true,
@@ -536,14 +584,28 @@ async function extractImageMetadata(buffer: ArrayBuffer, ext: string) {
 
         // Exif IFD
         if (exifObj.Exif) {
-          const dateOrig = exifObj.Exif[piexif.ExifIFD.DateTimeOriginal] || exifObj.Exif[piexif.ExifIFD.DateTimeDigitized];
+          const dateOrig = exifObj.Exif[piexif.ExifIFD.DateTimeOriginal];
+          const dateDig = exifObj.Exif[piexif.ExifIFD.DateTimeDigitized];
+
           if (dateOrig && String(dateOrig).trim() && !String(dateOrig).startsWith('1970')) {
             items.push({
-              id: 'timestamp-piexif',
+              id: 'timestamp-piexif-orig',
               category: 'timestamps',
-              name: 'Date & Time',
+              name: 'Original Date & Time',
               key: 'DateTimeOriginal',
               value: String(dateOrig).trim(),
+              isSensitive: false,
+              severity: 'MEDIUM',
+            });
+          }
+
+          if (dateDig && String(dateDig).trim() && !String(dateDig).startsWith('1970')) {
+            items.push({
+              id: 'timestamp-piexif-dig',
+              category: 'timestamps',
+              name: 'Digitized Date & Time',
+              key: 'DateTimeDigitized',
+              value: String(dateDig).trim(),
               isSensitive: false,
               severity: 'MEDIUM',
             });
@@ -661,7 +723,7 @@ async function extractPdfMetadata(buffer: ArrayBuffer) {
       items.push({
         id: 'pdf-author',
         category: 'author',
-        name: 'Author',
+        name: 'Author / Creator',
         key: 'Author',
         value: author,
         isSensitive: true,
@@ -739,7 +801,7 @@ async function extractPdfMetadata(buffer: ArrayBuffer) {
       items.push({
         id: 'pdf-created',
         category: 'timestamps',
-        name: 'Creation Date',
+        name: 'Creation Date & Time',
         key: 'CreationDate',
         value: creationDate.toISOString().replace('T', ' ').substring(0, 19),
         isSensitive: false,
@@ -752,7 +814,7 @@ async function extractPdfMetadata(buffer: ArrayBuffer) {
       items.push({
         id: 'pdf-modified',
         category: 'timestamps',
-        name: 'Modification Date',
+        name: 'Modified Date & Time',
         key: 'ModDate',
         value: modificationDate.toISOString().replace('T', ' ').substring(0, 19),
         isSensitive: false,
@@ -816,7 +878,7 @@ async function extractOfficeMetadata(buffer: ArrayBuffer) {
         items.push({
           id: 'office-creator',
           category: 'author',
-          name: 'Author',
+          name: 'Author / Creator',
           key: 'dc:creator',
           value: creator,
           isSensitive: true,
@@ -855,7 +917,7 @@ async function extractOfficeMetadata(buffer: ArrayBuffer) {
         items.push({
           id: 'office-created',
           category: 'timestamps',
-          name: 'Creation Date',
+          name: 'Creation Date & Time',
           key: 'dcterms:created',
           value: created,
           isSensitive: false,
@@ -867,7 +929,7 @@ async function extractOfficeMetadata(buffer: ArrayBuffer) {
         items.push({
           id: 'office-modified',
           category: 'timestamps',
-          name: 'Modified Date',
+          name: 'Modified Date & Time',
           key: 'dcterms:modified',
           value: modified,
           isSensitive: false,

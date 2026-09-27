@@ -55,14 +55,14 @@ export const Dropzone: React.FC<DropzoneProps> = ({
   };
 
   return (
-    <section className="rounded-2xl bg-surface-container-low/70 p-5 sm:p-7 border border-surface-container-high/60 shadow-lg">
+    <section className="rounded-2xl bg-surface-container-low/70 p-4 sm:p-6 border border-surface-container-high/60 shadow-lg">
       {/* Drop Area */}
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`relative w-full rounded-xl p-6 sm:p-8 flex flex-col items-center justify-center text-center transition-all cursor-pointer border-2 border-dashed ${
+        className={`relative w-full rounded-xl p-6 md:p-10 flex flex-col items-center justify-center text-center transition-all cursor-pointer border-2 border-dashed ${
           isDragOver
             ? 'border-primary bg-primary/10'
             : 'border-outline-variant/40 hover:border-primary/50 bg-surface-container-lowest/70 hover:bg-surface-container-lowest/90'
@@ -76,13 +76,17 @@ export const Dropzone: React.FC<DropzoneProps> = ({
           onChange={handleFileInputChange}
         />
 
-        <div className="w-14 h-14 mb-3 rounded-2xl bg-surface-container-high flex items-center justify-center text-primary">
-          <UploadCloud className="w-7 h-7" />
+        {/* Icon scaled for mobile vs desktop */}
+        <div className="w-10 h-10 md:w-12 md:h-12 mb-2 md:mb-3 rounded-2xl bg-surface-container-high flex items-center justify-center text-primary flex-shrink-0">
+          <UploadCloud className="w-5 h-5 md:w-6 md:h-6" />
         </div>
 
+        {/* Dynamic Mobile vs Desktop Prompt */}
         <p className="text-base sm:text-lg font-semibold text-on-surface mb-1">
-          Drag & drop a file here, or click to browse
+          <span className="sm:hidden">Tap to select a file</span>
+          <span className="hidden sm:inline">Drag & drop a file here, or click to browse</span>
         </p>
+
         <p className="text-xs sm:text-sm text-on-surface-variant mb-4">
           All processing runs 100% locally in your browser. Zero server uploads.
         </p>
@@ -95,18 +99,10 @@ export const Dropzone: React.FC<DropzoneProps> = ({
           Select File
         </button>
 
-        {/* Supported Formats */}
-        <div className="mt-5 flex flex-wrap items-center justify-center gap-1.5 text-xs font-mono text-on-surface-variant">
-          <span className="text-outline mr-1">Supported:</span>
-          {['.jpg', '.png', '.webp', '.pdf', '.docx', '.xlsx', '.pptx'].map(ext => (
-            <span
-              key={ext}
-              className="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant border border-surface-container-high"
-            >
-              {ext}
-            </span>
-          ))}
-        </div>
+        {/* Supported Formats: Sleek single inline row */}
+        <p className="mt-4 text-xs font-mono text-on-surface-variant/80 tracking-tight">
+          Supported: Images (JPG, PNG, WEBP) • Documents (PDF, DOCX, XLSX, PPTX)
+        </p>
       </div>
 
       {/* Active Loaded File Banner */}
@@ -124,9 +120,13 @@ export const Dropzone: React.FC<DropzoneProps> = ({
           {onClearFile && (
             <button
               type="button"
-              onClick={onClearFile}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClearFile();
+              }}
               className="p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-surface-container-highest transition-colors"
               title="Remove File"
+              aria-label="Remove File"
             >
               <X className="w-4 h-4" />
             </button>

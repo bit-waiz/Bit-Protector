@@ -4,6 +4,65 @@ import JSZip from 'jszip';
 import piexif from 'piexifjs';
 import { InspectionResult, MetadataCategory, MetadataItem, RiskLevel, GPSInfo } from './types';
 
+/**
+ * Canonical display-label map for overlapping EXIF/metadata keys.
+ * Keys that map to the same canonical label are considered duplicates;
+ * only the first occurrence (by insertion order) is kept.
+ */
+const CANONICAL_KEY_MAP: Record<string, string> = {
+  // Timestamps
+  DateTimeOriginal: 'Date Taken',
+  DateTimeDigitized: 'Date Taken',
+  CreateDate: 'Date Taken',
+  DateTime: 'Date Modified',
+  ModifyDate: 'Date Modified',
+  ModDate: 'Date Modified',
+  // Author
+  Artist: 'Author / Artist',
+  'By-line': 'Author / Artist',
+  Creator: 'Author / Artist',
+  'dc:creator': 'Author / Artist',
+  // Software
+  Software: 'Software',
+  CreatorTool: 'Software',
+  ProcessingSoftware: 'Software',
+  // Serial
+  BodySerialNumber: 'Camera Serial #',
+  CameraSerialNumber: 'Camera Serial #',
+  InternalSerialNumber: 'Camera Serial #',
+  LensSerialNumber: 'Lens Serial #',
+};
+
+/**
+ * Normalizes a metadata item's key to its canonical display label
+ * and deduplicates the list so each canonical key appears only once.
+ */
+function deduplicateMetadataItems(items: MetadataItem[]): MetadataItem[] {
+  const seen = new Set<string>();
+  const result: MetadataItem[] = [];
+
+  for (const item of items) {
+    const canonicalKey = CANONICAL_KEY_MAP[item.key] ?? item.key;
+    // Use canonical key + value as the dedup fingerprint
+    const fingerprint = `${canonicalKey}::${item.value}`;
+
+    // Also deduplicate by canonical key alone (keep first encountered value)
+    const keyOnlyFingerprint = `KEY::${canonicalKey}`;
+
+    if (!seen.has(fingerprint) && !seen.has(keyOnlyFingerprint)) {
+      seen.add(fingerprint);
+      seen.add(keyOnlyFingerprint);
+      // Apply the canonical label to the display key
+      result.push({
+        ...item,
+        key: canonicalKey,
+      });
+    }
+  }
+
+  return result;
+}
+
 function formatCoordinate(val: number, isLat: boolean): string {
   const dir = isLat ? (val >= 0 ? 'N' : 'S') : (val >= 0 ? 'E' : 'W');
   return `${Math.abs(val).toFixed(6)}° ${dir}`;
@@ -73,7 +132,12 @@ export async function inspectFile(file: File | { name: string; size: number; arr
     rawReport = { file: fileName, size: fileSize };
   }
 
-  // Categorize items
+  // ── Deduplication & Normalization ────────────────────────────────────────────
+  // Apply canonical key normalization and remove duplicate metadata fields
+  // so each distinct property appears exactly once in the MetadataTable.
+  const dedupedItems = deduplicateMetadataItems(items);
+
+  // Categorize deduplicated items
   const categories: InspectionResult['categories'] = {
     location: [],
     device: [],
@@ -85,7 +149,7 @@ export async function inspectFile(file: File | { name: string; size: number; arr
     technical: [],
   };
 
-  for (const item of items) {
+  for (const item of dedupedItems) {
     if (categories[item.category]) {
       categories[item.category].push(item);
     } else {
@@ -102,7 +166,7 @@ export async function inspectFile(file: File | { name: string; size: number; arr
   const hasAuthorOrIdentity = categories.author.length > 0;
   const hasSerialOrHardware = categories.device.some(i => i.isSensitive || i.name.toLowerCase().includes('serial'));
 
-  if (items.length === 0) {
+  if (dedupedItems.length === 0) {
     riskLevel = 'LOW';
     riskReason = 'Clean (0 metadata fields detected)';
     riskSummary = 'This file has no embedded EXIF, GPS, author, or revision history properties.';
@@ -134,7 +198,7 @@ export async function inspectFile(file: File | { name: string; size: number; arr
     riskSummary = 'Technical file headers contain creation timestamps, device specs, or software build versions.';
   }
 
-  const sensitiveTagsCount = items.filter(i => i.isSensitive).length;
+  const sensitiveTagsCount = dedupedItems.filter(i => i.isSensitive).length;
 
   return {
     fileName,
@@ -145,9 +209,9 @@ export async function inspectFile(file: File | { name: string; size: number; arr
     riskReason,
     riskSummary,
     gps: gpsInfo,
-    items,
+    items: dedupedItems,
     categories,
-    totalTagsFound: items.length,
+    totalTagsFound: dedupedItems.length,
     sensitiveTagsCount,
     hasThumbnail,
     hasRevisionHistory,

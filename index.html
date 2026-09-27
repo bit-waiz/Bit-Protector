@@ -5,7 +5,11 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self';" />
-  <link rel="icon" type="image/png" href="/logo.png" />
+
+  <!-- Favicon & Icons -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/logo.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/logo.png" />
+  <link rel="apple-touch-icon" href="/logo.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <!-- Google Search Console Verification -->
@@ -23,18 +27,37 @@
 
   <!-- Open Graph / Facebook / LinkedIn -->
   <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://bitprotector.vercel.app/" />
   <meta property="og:site_name" content="Bit Protector" />
   <meta property="og:title" content="Bit Protector — 100% In-Browser Metadata Privacy Engine" />
   <meta property="og:description"
     content="Clean EXIF, GPS, author, and timestamp metadata directly in your browser. Zero server uploads, zero network traffic, 100% local privacy." />
-  <meta property="og:image" content="/logo.png" />
+  <meta property="og:image" content="https://bitprotector.vercel.app/logo.png" />
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Bit Protector — 100% In-Browser Metadata Privacy Engine" />
   <meta name="twitter:description"
     content="Clean EXIF, GPS, author, and timestamp metadata directly in your browser. Zero server uploads, zero network traffic, 100% local privacy." />
-  <meta name="twitter:image" content="/logo.png" />
+  <meta name="twitter:image" content="https://bitprotector.vercel.app/logo.png" />
+
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Bit Protector",
+    "url": "https://bitprotector.vercel.app/",
+    "description": "100% Client-Side In-Browser Metadata Privacy Engine. Sanitize EXIF, GPS, author, and timestamp metadata with zero server uploads.",
+    "applicationCategory": "SecurityApplication",
+    "operatingSystem": "All",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
